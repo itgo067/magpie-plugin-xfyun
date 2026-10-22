@@ -1,0 +1,47 @@
+{
+  "name": "opencode-xfyun-auth",
+  "version": "0.1.0",
+  "description": "magpie / OpenCode provider plugin for iFlytek Spark (讯飞星辰 MaaS) — Spark-X2.6, Spark-X2.5, GLM-5.x, DeepSeek-V4, Kimi-K2.7",
+  "type": "module",
+  "main": "./index.mjs",
+  "files": [
+    "index.mjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "magpie",
+    "magpie-plugin",
+    "xfyun",
+    "iflytek",
+    "spark",
+    "spark-x2.6"
+  ],
+  "license": "MIT",
+  "author": "itgo067",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/itgo067/magpie-plugin-xfyun.git"
+  },
+  "homepage": "https://github.com/itgo067/magpie-plugin-xfyun#readme",
+  "bugs": {
+    "url": "https://github.com/itgo067/magpie-plugin-xfyun/issues"
+  },
+  "engines": {
+    "bun": ">=1.1"
+  },
+  "scripts": {
+    "test": "bun test",
+    "check": "bun test && npm pack --dry-run"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "magpie": {
+    "icon": "https://oss-beijing-m8.openstorage.cn/atp/image/model/icon/icon_iflyspark_96.png",
+    "maxConcurrency": 4
+  }
+}
