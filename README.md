@@ -198,6 +198,13 @@ magpie plugin add .           # install the local folder
 The plugin exports `XfyunAuthPlugin` (the plugin function) and `_internal` (plain data and
 helpers, not a function, so magpie ignores it and `bun test` can reach it).
 
+## Publishing
+
+See [docs/PUBLISHING.md](docs/PUBLISHING.md) for the full release playbook: one-time npm
+account / 2FA setup, the per-release steps, and the traps that cost real time the first
+time round (pre-2FA tokens returning a bare `E403`, mirrors in `~/.npmrc`, non-interactive
+`npm publish` and its browser 2FA link, `MAGPIE_BUN` for sandbox testing).
+
 ## License
 
 MIT
