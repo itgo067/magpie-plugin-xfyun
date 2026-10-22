@@ -47,6 +47,10 @@ Spark-X2.5 系列、GLM-5.2/5.3、DeepSeek-V4-Pro/Flash、Kimi-K2.7-Code。
 magpie plugin options opencode-xfyun-auth '{"protocol":"anthropic"}'   # chat | anthropic | responses
 ```
 
+> `magpie plugin options` takes the plugin's **name as installed**, which is the npm package
+> name (`opencode-xfyun-auth`) — not the GitHub repo name. Check with `magpie plugin list`
+> if unsure.
+
 - `chat`（默认）：`/v2/chat/completions`，模型广场全部模型都支持。
 - `anthropic`：`/anthropic/v1/messages`，Claude Code 类 agent 走这个，网关会翻译
   `thinking` 与 `tool_use`。
@@ -74,6 +78,8 @@ with the plugin's `options`:
 ```sh
 magpie plugin options opencode-xfyun-auth '{"protocol":"anthropic"}'
 ```
+
+The name here is the npm package name, not the repo name.
 
 | `protocol`        | npm                        | base URL                                               | endpoint            |
 | ----------------- | -------------------------- | ------------------------------------------------------ | ------------------- |
