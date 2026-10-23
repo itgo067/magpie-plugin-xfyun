@@ -1,5 +1,10 @@
 name: publish
 
+# A tag push publishes: `npm version patch && git push --follow-tags`.
+# The publish itself is npm's trusted publishing (OIDC): this workflow is the
+# package's Trusted Publisher on npmjs.com, so no token exists anywhere — not
+# in repo secrets, not on a maintainer's machine. npm also records provenance
+# on its own, which is why the publish step asks for nothing.
 on:
   push:
     tags: ["v*"]
@@ -7,11 +12,16 @@ on:
 
 permissions:
   id-token: write # required: lets npm exchange a GitHub OIDC token for a short-lived publish token
-  contents: read
+  contents: write # required: the GitHub Release at the end
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       # No registry-url on purpose: it would write _authToken=${NODE_AUTH_TOKEN}
@@ -19,14 +29,98 @@ jobs:
       # package.json publishConfig.registry already points at registry.npmjs.org.
       - uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: "24" # npm 11.5+, which speaks trusted publishing
           package-manager-cache: false
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+
+      # Catches the two mistakes a release can make before npm does: a tag that
+      # names another version, and a dependency. A plugin shares magpie's host
+      # process, so a dependency would have to be installed there to work.
+      - name: Check the tag, the version and the dependencies
+        id: release
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync, appendFileSync } from 'node:fs'
+          const pkg = JSON.parse(readFileSync('package.json', 'utf8'))
+          const semver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*)?$/
+          if (!semver.test(pkg.version)) {
+            throw new Error(`package.json version "${pkg.version}" is not SemVer without build metadata`)
+          }
+          const tag = process.env.GITHUB_REF_NAME
+          if (process.env.GITHUB_REF_TYPE === 'tag' && tag !== `v${pkg.version}`) {
+            throw new Error(`tag ${tag} must equal v${pkg.version}: retag, or bump package.json`)
+          }
+          const deps = Object.keys(pkg.dependencies ?? {})
+          if (pkg.private || deps.length) {
+            throw new Error(`a magpie plugin loads into magpie's own process: it must be public with zero runtime dependencies, found ${deps.length ? deps.join(', ') : 'private: true'}`)
+          }
+          appendFileSync(process.env.GITHUB_OUTPUT, `version=${pkg.version}\n`)
+          appendFileSync(process.env.GITHUB_OUTPUT, `dist-tag=${pkg.version.includes('-') ? 'next' : 'latest'}\n`)
+          console.log(`${pkg.name}@${pkg.version}: tag ok, zero runtime dependencies`)
+          JS
+
       - run: bun test
-      - name: npm version
-        run: npm --version
+      - run: npm --version
+
+      # Re-running a release is harmless: a version npm already has is skipped,
+      # so the tag can be moved to a fix without a duplicate-version failure.
+      - name: Is this version on npm already?
+        id: published
+        run: |
+          if [ "$(npm view "$(node -p 'require("./package.json").name')@${{ steps.release.outputs.version }}" version --registry https://registry.npmjs.org 2>/dev/null)" = "${{ steps.release.outputs.version }}" ]; then
+            echo "value=true" >> "$GITHUB_OUTPUT"
+            echo "= $(node -p 'require("./package.json").name')@${{ steps.release.outputs.version }} is on npm already"
+          else
+            echo "value=false" >> "$GITHUB_OUTPUT"
+          fi
+
       # No NODE_AUTH_TOKEN on purpose — npm CLI detects the OIDC environment and
       # authenticates through the trusted publisher configured on npmjs.com.
-      - run: npm publish --access public --registry https://registry.npmjs.org
+      - name: Publish
+        if: steps.published.outputs.value != 'true'
+        run: npm publish --access public --registry https://registry.npmjs.org --tag "${{ steps.release.outputs.dist-tag }}"
+
+      # A publish that answered 200 but never reached the public registry is the
+      # failure worth catching here rather than in a user's install.
+      - name: Verify the public registry has it
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync } from 'node:fs'
+          import { setTimeout } from 'node:timers/promises'
+          const pkg = JSON.parse(readFileSync('package.json', 'utf8'))
+          const url = `https://registry.npmjs.org/${pkg.name.replace('/', '%2f')}/${process.env.VERSION}`
+          for (let left = 12; left > 0; left--) {
+            const res = await fetch(url)
+            if (res.ok) {
+              const body = await res.json()
+              const provenance = body.dist?.attestations ? 'with provenance' : 'without provenance'
+              console.log(`✓ ${body.name}@${body.version} is public, ${provenance}`)
+              process.exit(0)
+            }
+            if (res.status !== 404 && res.status < 500) {
+              throw new Error(`registry.npmjs.org answered ${res.status} for ${url}`)
+            }
+            await setTimeout(5000)
+          }
+          throw new Error(`${pkg.name}@${process.env.VERSION} is still not on the public registry: check the publish step's log`)
+          JS
+
+      - name: GitHub Release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIST_TAG: ${{ steps.release.outputs.dist-tag }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "= $GITHUB_REF_NAME is released already"
+            exit 0
+          fi
+          if [ "$DIST_TAG" = next ]; then
+            gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --prerelease
+          else
+            gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes
+          fi
