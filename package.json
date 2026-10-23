@@ -1,6 +1,6 @@
 {
   "name": "opencode-xfyun-auth",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "magpie / OpenCode provider plugin for iFlytek Spark (讯飞星辰 MaaS): Spark-X2.6, Spark-X2.5, GLM-5.x, DeepSeek-V4, Kimi-K2.7",
   "type": "module",
   "main": "./index.mjs",
