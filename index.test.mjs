@@ -113,3 +113,13 @@ test("loader signs requests with both bearer and x-api-key", async () => {
   expect(got.apiKey).toBe("ak-test")
   expect(await plugin.auth.loader(async () => ({ type: "oauth" }))).toEqual({})
 })
+
+test("magpie.icon is the inlined assets/icon.png", async () => {
+  const { readFile } = await import("node:fs/promises")
+  const pkg = JSON.parse(await readFile(new URL("./package.json", import.meta.url), "utf8"))
+  const icon = pkg.magpie.icon
+  expect(icon.startsWith("data:image/png;base64,")).toBe(true)
+  const inlined = Buffer.from(icon.slice("data:image/png;base64,".length), "base64")
+  const onDisk = await readFile(new URL("./assets/icon.png", import.meta.url))
+  expect(inlined.equals(onDisk)).toBe(true)
+})
